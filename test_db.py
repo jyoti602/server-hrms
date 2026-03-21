@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.database import engine, SessionLocal
+from db.database import engine, SessionLocal
 from app.models.employee_simple import EmployeeSimple
 from sqlalchemy import text
 
