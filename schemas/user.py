@@ -1,12 +1,15 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr
+
+from models.user import UserRole
 
 class UserBase(BaseModel):
     email: EmailStr
     username: str
     full_name: str
-    role: str
+    role: UserRole
 
 class UserCreate(UserBase):
     password: str

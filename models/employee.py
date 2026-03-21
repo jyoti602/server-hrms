@@ -1,7 +1,17 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey
+import enum
+
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from db.database import Base
+
+
+class EmployeeStatus(str, enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    TERMINATED = "terminated"
+
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -17,7 +27,11 @@ class Employee(Base):
     position = Column(String, nullable=False)
     salary = Column(Float, nullable=False)
     hire_date = Column(DateTime(timezone=True), nullable=False)
-    is_active = Column(String, default="active")  # active, inactive, terminated
+    is_active = Column(
+        Enum(EmployeeStatus),
+        nullable=False,
+        default=EmployeeStatus.ACTIVE,
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

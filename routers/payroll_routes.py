@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from db.database import get_db
-from  models.payroll import Payroll
-from models.employee import Employee
+from models.employee import Employee, EmployeeStatus
+from models.payroll import Payroll
+from models.user import User, UserRole
 from schemas.payroll import Payroll as PayrollSchema, PayrollCreate, PayrollUpdate
 from auth.auth import get_current_active_user, require_role
-from  models.user import User
 
 router = APIRouter(prefix="/payroll", tags=["payroll"])
 
@@ -24,7 +24,7 @@ def get_payrolls(
     query = db.query(Payroll)
     
     # Employees can only see their own payroll
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee:
             query = query.filter(Payroll.employee_id == employee.id)
@@ -50,7 +50,7 @@ def get_payroll(
         raise HTTPException(status_code=404, detail="Payroll not found")
     
     # Employees can only view their own payroll
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee and payroll.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this payroll")
@@ -61,7 +61,7 @@ def get_payroll(
 def create_payroll(
     payroll: PayrollCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     # Check if payroll already exists for this employee and month
     existing_payroll = db.query(Payroll).filter(
@@ -86,7 +86,7 @@ def update_payroll(
     payroll_id: int,
     payroll_update: PayrollUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_payroll = db.query(Payroll).filter(Payroll.id == payroll_id).first()
     if not db_payroll:
@@ -104,7 +104,7 @@ def update_payroll(
 def delete_payroll(
     payroll_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_payroll = db.query(Payroll).filter(Payroll.id == payroll_id).first()
     if not db_payroll:
@@ -118,7 +118,7 @@ def delete_payroll(
 def get_monthly_payroll_summary(
     month: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     payrolls = db.query(Payroll).filter(Payroll.month == month).all()
     
@@ -140,10 +140,10 @@ def get_monthly_payroll_summary(
 def generate_bulk_payroll(
     month: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     # Get all active employees
-    employees = db.query(Employee).filter(Employee.is_active == "active").all()
+    employees = db.query(Employee).filter(Employee.is_active == EmployeeStatus.ACTIVE).all()
     
     created_payrolls = []
     for employee in employees:

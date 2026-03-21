@@ -1,6 +1,9 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr
+
+from models.employee import EmployeeStatus
 
 class EmployeeBase(BaseModel):
     first_name: str
@@ -24,14 +27,14 @@ class EmployeeUpdate(BaseModel):
     department: Optional[str] = None
     position: Optional[str] = None
     salary: Optional[float] = None
-    is_active: Optional[str] = None
+    is_active: Optional[EmployeeStatus] = None
 
 class Employee(EmployeeBase):
     id: int
     employee_id: str
     user_id: int
     hire_date: datetime
-    is_active: str
+    is_active: EmployeeStatus
     created_at: datetime
     updated_at: Optional[datetime] = None
 

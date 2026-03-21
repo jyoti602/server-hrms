@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 from datetime import datetime, date
 
 from db.database import get_db
-from  models.leave import Leave
+from models.leave import Leave
 from models.employee import Employee
+from models.user import User, UserRole
 from schemas.leave import Leave as LeaveSchema, LeaveCreate, LeaveUpdate
 from auth.auth import get_current_active_user, require_role
-from  models.user import User
 
 router = APIRouter(prefix="/leaves", tags=["leaves"])
 
@@ -24,7 +24,7 @@ def get_leaves(
     query = db.query(Leave)
     
     # Employees can only see their own leaves
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee:
             query = query.filter(Leave.employee_id == employee.id)
@@ -50,7 +50,7 @@ def get_leave(
         raise HTTPException(status_code=404, detail="Leave not found")
     
     # Employees can only view their own leaves
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee and leave.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this leave")
@@ -64,7 +64,7 @@ def create_leave(
     current_user: User = Depends(get_current_active_user)
 ):
     # Employees can only create leaves for themselves
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee:
             leave.employee_id = employee.id
@@ -89,7 +89,7 @@ def update_leave(
         raise HTTPException(status_code=404, detail="Leave not found")
     
     # Only admins can approve/reject leaves
-    if current_user.role == "admin":
+    if current_user.role == UserRole.ADMIN:
         update_data = leave_update.dict(exclude_unset=True)
         
         # If approving, set approved_by and approved_at
@@ -120,7 +120,7 @@ def update_leave(
 def delete_leave(
     leave_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_leave = db.query(Leave).filter(Leave.id == leave_id).first()
     if not db_leave:
@@ -133,7 +133,7 @@ def delete_leave(
 @router.get("/pending/count")
 def get_pending_leaves_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     count = db.query(Leave).filter(Leave.status == "pending").count()
     return {"pending_leaves": count}

@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 
 from db.database import get_db
-from  models.user import User
+from models.user import User, UserRole
 from schemas.user import TokenData
 
 load_dotenv()
@@ -72,7 +72,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-def require_role(required_role: str):
+def require_role(required_role: UserRole):
     def role_checker(current_user: User = Depends(get_current_active_user)):
         if current_user.role != required_role:
             raise HTTPException(

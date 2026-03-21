@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 from datetime import datetime, date
 
 from db.database import get_db
-from  models.attendance import Attendance
+from models.attendance import Attendance
 from models.employee import Employee
+from models.user import User, UserRole
 from schemas.attendance import Attendance as AttendanceSchema, AttendanceCreate, AttendanceUpdate
 from auth.auth import get_current_active_user, require_role
-from  models.user import User
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
@@ -25,7 +25,7 @@ def get_attendance(
     query = db.query(Attendance)
     
     # Employees can only see their own attendance
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee:
             query = query.filter(Attendance.employee_id == employee.id)
@@ -53,7 +53,7 @@ def get_attendance_record(
         raise HTTPException(status_code=404, detail="Attendance record not found")
     
     # Employees can only view their own attendance
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee and attendance.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this attendance")
@@ -64,7 +64,7 @@ def get_attendance_record(
 def create_attendance(
     attendance: AttendanceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_attendance = Attendance(**attendance.dict())
     db.add(db_attendance)
@@ -77,7 +77,7 @@ def update_attendance(
     attendance_id: int,
     attendance_update: AttendanceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
     if not db_attendance:
@@ -95,7 +95,7 @@ def update_attendance(
 def delete_attendance(
     attendance_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
     if not db_attendance:
@@ -114,7 +114,7 @@ def get_attendance_stats(
     current_user: User = Depends(get_current_active_user)
 ):
     # Employees can only view their own stats
-    if current_user.role == "employee":
+    if current_user.role == UserRole.EMPLOYEE:
         employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if employee and employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view these stats")

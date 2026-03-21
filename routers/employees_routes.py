@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 
 from db.database import get_db
 from models.employee import Employee
+from models.user import User, UserRole
 from schemas.employee import Employee as EmployeeSchema, EmployeeCreate, EmployeeUpdate
 from auth.auth import get_current_active_user, require_role
-from  models.user import User
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -15,7 +15,7 @@ def get_employees(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     employees = db.query(Employee).offset(skip).limit(limit).all()
     return employees
@@ -31,7 +31,7 @@ def get_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
     
     # Employees can only view their own profile
-    if current_user.role == "employee" and employee.user_id != current_user.id:
+    if current_user.role == UserRole.EMPLOYEE and employee.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to view this employee")
     
     return employee
@@ -40,7 +40,7 @@ def get_employee(
 def create_employee(
     employee: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_employee = db.query(Employee).filter(Employee.employee_id == employee.employee_id).first()
     if db_employee:
@@ -64,7 +64,7 @@ def update_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
     
     # Employees can only update their own profile
-    if current_user.role == "employee" and db_employee.user_id != current_user.id:
+    if current_user.role == UserRole.EMPLOYEE and db_employee.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this employee")
     
     update_data = employee_update.dict(exclude_unset=True)
@@ -79,7 +79,7 @@ def update_employee(
 def delete_employee(
     employee_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin"))
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     db_employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not db_employee:
