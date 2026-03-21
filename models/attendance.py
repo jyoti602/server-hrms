@@ -11,10 +11,10 @@ class Attendance(Base):
     date = Column(DateTime(timezone=True), nullable=False)
     check_in = Column(Time)
     check_out = Column(Time)
-    status = Column(String, nullable=False)  # present, absent, late, half_day
+    status = Column(String(50), nullable=False)  # present, absent, late, half_day
     work_hours = Column(Integer)  # in hours
     overtime_hours = Column(Integer, default=0)
-    notes = Column(String)
+    notes = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

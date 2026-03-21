@@ -25,7 +25,7 @@ def get_payrolls(
     
     # Employees can only see their own payroll
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee:
             query = query.filter(Payroll.employee_id == employee.id)
         else:
@@ -51,7 +51,7 @@ def get_payroll(
     
     # Employees can only view their own payroll
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee and payroll.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this payroll")
     
@@ -143,7 +143,7 @@ def generate_bulk_payroll(
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     # Get all active employees
-    employees = db.query(Employee).filter(Employee.is_active == EmployeeStatus.ACTIVE).all()
+    employees = db.query(Employee).filter(Employee.status == EmployeeStatus.ACTIVE.value).all()
     
     created_payrolls = []
     for employee in employees:
@@ -157,12 +157,12 @@ def generate_bulk_payroll(
             payroll = Payroll(
                 employee_id=employee.id,
                 month=month,
-                basic_salary=employee.salary,
+                basic_salary=0,
                 allowances=0,
                 deductions=0,
                 overtime_pay=0,
                 bonus=0,
-                net_salary=employee.salary,
+                net_salary=0,
                 status="pending"
             )
             db.add(payroll)

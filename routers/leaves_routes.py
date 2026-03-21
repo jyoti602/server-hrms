@@ -25,7 +25,7 @@ def get_leaves(
     
     # Employees can only see their own leaves
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee:
             query = query.filter(Leave.employee_id == employee.id)
         else:
@@ -51,7 +51,7 @@ def get_leave(
     
     # Employees can only view their own leaves
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee and leave.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this leave")
     
@@ -65,7 +65,7 @@ def create_leave(
 ):
     # Employees can only create leaves for themselves
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee:
             leave.employee_id = employee.id
         else:
@@ -94,7 +94,7 @@ def update_leave(
         
         # If approving, set approved_by and approved_at
         if update_data.get("status") == "approved":
-            current_employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+            current_employee = db.query(Employee).filter(Employee.email == current_user.email).first()
             if current_employee:
                 update_data["approved_by"] = current_employee.id
                 update_data["approved_at"] = datetime.utcnow()
@@ -103,7 +103,7 @@ def update_leave(
             setattr(db_leave, field, value)
     else:
         # Employees can only cancel their own pending leaves
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee and db_leave.employee_id == employee.id and db_leave.status == "pending":
             if leave_update.status == "cancelled":
                 db_leave.status = "cancelled"

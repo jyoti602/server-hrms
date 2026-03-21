@@ -30,6 +30,10 @@ class User(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    role: UserRole
+    username: str
+    email: EmailStr
+    full_name: str
 
 class TokenData(BaseModel):
     username: Optional[str] = None

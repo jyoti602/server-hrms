@@ -8,7 +8,7 @@ class Payroll(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    month = Column(String, nullable=False)  # "2024-01"
+    month = Column(String(20), nullable=False)  # "2024-01"
     basic_salary = Column(Float, nullable=False)
     allowances = Column(Float, default=0)
     deductions = Column(Float, default=0)
@@ -16,8 +16,8 @@ class Payroll(Base):
     bonus = Column(Float, default=0)
     net_salary = Column(Float, nullable=False)
     payment_date = Column(DateTime(timezone=True))
-    status = Column(String, default="pending")  # pending, processed, paid
-    payment_method = Column(String)  # bank_transfer, cash, check
+    status = Column(String(50), default="pending")  # pending, processed, paid
+    payment_method = Column(String(50))  # bank_transfer, cash, check
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -26,7 +26,7 @@ def get_attendance(
     
     # Employees can only see their own attendance
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee:
             query = query.filter(Attendance.employee_id == employee.id)
         else:
@@ -54,7 +54,7 @@ def get_attendance_record(
     
     # Employees can only view their own attendance
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee and attendance.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this attendance")
     
@@ -115,7 +115,7 @@ def get_attendance_stats(
 ):
     # Employees can only view their own stats
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
         if employee and employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view these stats")
     

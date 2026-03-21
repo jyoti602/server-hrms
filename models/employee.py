@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -8,35 +8,32 @@ from db.database import Base
 
 
 class EmployeeStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    TERMINATED = "terminated"
+    ACTIVE = "Active"
+    INACTIVE = "Inactive"
 
 
 class Employee(Base):
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
+    name = Column(String(255), nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    phone = Column(String)
+    phone = Column(String(20))
     department = Column(String, nullable=False)
     position = Column(String, nullable=False)
-    salary = Column(Float, nullable=False)
-    hire_date = Column(DateTime(timezone=True), nullable=False)
-    is_active = Column(
-        Enum(EmployeeStatus),
-        nullable=False,
-        default=EmployeeStatus.ACTIVE,
-    )
+    date_of_birth = Column(Date)
+    joining_date = Column(Date)
+    address = Column(String(255))
+    emergency_contact = Column(String(20))
+    status = Column(String, nullable=False, default=EmployeeStatus.ACTIVE.value)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     # Relationships
-    user = relationship("User", back_populates="employee")
     attendance = relationship("Attendance", back_populates="employee")
     leaves = relationship("Leave", back_populates="employee", foreign_keys="Leave.employee_id")
     approved_leaves = relationship("Leave", back_populates="approver", foreign_keys="Leave.approved_by")

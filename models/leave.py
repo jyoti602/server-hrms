@@ -8,12 +8,12 @@ class Leave(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    leave_type = Column(String, nullable=False)  # sick, casual, annual, maternity
+    leave_type = Column(String(50), nullable=False)  # sick, casual, annual, maternity
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
     total_days = Column(Float, nullable=False)
     reason = Column(Text)
-    status = Column(String, default="pending")  # pending, approved, rejected
+    status = Column(String(50), default="pending")  # pending, approved, rejected
     approved_by = Column(Integer, ForeignKey("employees.id"))
     approved_at = Column(DateTime(timezone=True))
     rejection_reason = Column(Text)
