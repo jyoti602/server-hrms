@@ -43,23 +43,7 @@ class LeaveRequestUpdate(BaseModel):
 class LeaveRequestResponse(LeaveRequestBase):
     id: int
     status: LeaveStatus
-    created_at: str
-
-    class Config:
-        from_attributes = True
-        populate_by_name = True
-        exclude = {'_sa_instance_state'}
-
-class LeaveRequestAdminResponse(BaseModel):
-    id: int
-    employee_id: str
-    employee_name: str
-    leave_type: LeaveType
-    from_date: str
-    to_date: str
-    reason: str
-    status: LeaveStatus
-    created_at: str
+    created_at: datetime
 
     class Config:
         from_attributes = True

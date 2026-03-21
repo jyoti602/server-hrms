@@ -1,21 +1,20 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 
 from db.database import get_db
-from  models.leave_request import LeaveRequest, LeaveStatus, LeaveType
+from models.leave_request import LeaveRequest, LeaveStatus
 from schemas.leave_request import (
-    LeaveRequestCreate, 
-    LeaveRequestResponse, 
-    LeaveRequestUpdate, 
-    LeaveRequestAdminResponse
+    LeaveRequestCreate,
+    LeaveRequestResponse,
+    LeaveRequestUpdate,
 )
 
 router = APIRouter(prefix="/leave-requests", tags=["leave-requests"])
 
 # Admin-specific endpoints
-@router.get("/all")
+@router.get("/all", response_model=List[LeaveRequestResponse])
 def get_all_leave_requests_admin(
     status: Optional[LeaveStatus] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -30,26 +29,9 @@ def get_all_leave_requests_admin(
     if status:
         query = query.filter(LeaveRequest.status == status.value)
     
-    leave_requests = query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit).all()
-    
-    # Convert to dict manually to avoid serialization issues
-    result = []
-    for lr in leave_requests:
-        result.append({
-            "id": lr.id,
-            "employee_id": lr.employee_id,
-            "employee_name": lr.employee_name,
-            "leave_type": lr.leave_type,
-            "from_date": lr.from_date.isoformat(),
-            "to_date": lr.to_date.isoformat(),
-            "reason": lr.reason,
-            "status": lr.status,
-            "created_at": lr.created_at.isoformat()
-        })
-    
-    return result
+    return query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit).all()
 
-@router.put("/update-status/{leave_id}")
+@router.put("/update-status/{leave_id}", response_model=LeaveRequestResponse)
 def update_leave_status(
     leave_id: int,
     status: LeaveStatus = Query(..., description="New status (Approved/Rejected)"),
@@ -71,19 +53,9 @@ def update_leave_status(
     db.commit()
     db.refresh(leave_request)
     
-    return {
-        "id": leave_request.id,
-        "employee_id": leave_request.employee_id,
-        "employee_name": leave_request.employee_name,
-        "leave_type": leave_request.leave_type,
-        "from_date": leave_request.from_date.isoformat(),
-        "to_date": leave_request.to_date.isoformat(),
-        "reason": leave_request.reason,
-        "status": leave_request.status,
-        "created_at": leave_request.created_at.isoformat()
-    }
+    return leave_request
 
-@router.post("/")
+@router.post("/", response_model=LeaveRequestResponse)
 def create_leave_request(
     leave_request: LeaveRequestCreate,
     db: Session = Depends(get_db)
@@ -113,17 +85,7 @@ def create_leave_request(
     db.commit()
     db.refresh(db_leave_request)
     
-    return {
-        "id": db_leave_request.id,
-        "employee_id": db_leave_request.employee_id,
-        "employee_name": db_leave_request.employee_name,
-        "leave_type": db_leave_request.leave_type,
-        "from_date": db_leave_request.from_date.isoformat(),
-        "to_date": db_leave_request.to_date.isoformat(),
-        "reason": db_leave_request.reason,
-        "status": db_leave_request.status,
-        "created_at": db_leave_request.created_at.isoformat()
-    }
+    return db_leave_request
 
 @router.get("/", response_model=List[LeaveRequestResponse])
 def get_leave_requests(
@@ -144,24 +106,26 @@ def get_leave_requests(
     if status:
         query = query.filter(LeaveRequest.status == status.value)
     
-    leave_requests = query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit).all()
-    
-    # Convert to dict manually to avoid serialization issues
-    result = []
-    for lr in leave_requests:
-        result.append({
-            "id": lr.id,
-            "employee_id": lr.employee_id,
-            "employee_name": lr.employee_name,
-            "leave_type": lr.leave_type,
-            "from_date": lr.from_date.isoformat(),
-            "to_date": lr.to_date.isoformat(),
-            "reason": lr.reason,
-            "status": lr.status,
-            "created_at": lr.created_at.isoformat()
-        })
-    
-    return result
+    return query.order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit).all()
+
+@router.get("/employee/{employee_id}", response_model=List[LeaveRequestResponse])
+def get_employee_leave_requests(
+    employee_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all leave requests for a specific employee
+    """
+    return (
+        db.query(LeaveRequest)
+        .filter(LeaveRequest.employee_id == employee_id)
+        .order_by(LeaveRequest.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 @router.get("/{leave_id}", response_model=LeaveRequestResponse)
 def get_leave_request(
@@ -178,17 +142,7 @@ def get_leave_request(
             detail="Leave request not found"
         )
     
-    return {
-        "id": leave_request.id,
-        "employee_id": leave_request.employee_id,
-        "employee_name": leave_request.employee_name,
-        "leave_type": leave_request.leave_type,
-        "from_date": leave_request.from_date.isoformat(),
-        "to_date": leave_request.to_date.isoformat(),
-        "reason": leave_request.reason,
-        "status": leave_request.status,
-        "created_at": leave_request.created_at.isoformat()
-    }
+    return leave_request
 
 @router.put("/{leave_id}", response_model=LeaveRequestResponse)
 def update_leave_request(
@@ -213,17 +167,7 @@ def update_leave_request(
     db.commit()
     db.refresh(leave_request)
     
-    return {
-        "id": leave_request.id,
-        "employee_id": leave_request.employee_id,
-        "employee_name": leave_request.employee_name,
-        "leave_type": leave_request.leave_type,
-        "from_date": leave_request.from_date.isoformat(),
-        "to_date": leave_request.to_date.isoformat(),
-        "reason": leave_request.reason,
-        "status": leave_request.status,
-        "created_at": leave_request.created_at.isoformat()
-    }
+    return leave_request
 
 @router.delete("/{leave_id}")
 def delete_leave_request(
@@ -244,33 +188,3 @@ def delete_leave_request(
     db.commit()
     
     return {"message": "Leave request deleted successfully"}
-
-@router.get("/employee/{employee_id}", response_model=List[LeaveRequestResponse])
-def get_employee_leave_requests(
-    employee_id: str,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(get_db)
-):
-    """
-    Get all leave requests for a specific employee
-    """
-    leave_requests = db.query(LeaveRequest).filter(
-        LeaveRequest.employee_id == employee_id
-    ).order_by(LeaveRequest.created_at.desc()).offset(skip).limit(limit).all()
-    
-    result = []
-    for lr in leave_requests:
-        result.append({
-            "id": lr.id,
-            "employee_id": lr.employee_id,
-            "employee_name": lr.employee_name,
-            "leave_type": lr.leave_type,
-            "from_date": lr.from_date,
-            "to_date": lr.to_date,
-            "reason": lr.reason,
-            "status": lr.status,
-            "created_at": lr.created_at
-        })
-    
-    return result

@@ -1,11 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
 import enum
 
-# Create a separate Base for LeaveRequest to avoid conflicts
-LeaveBase = declarative_base()
+from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy.sql import func
+from db.database import Base
 
 class LeaveStatus(str, enum.Enum):
     PENDING = "Pending"
@@ -20,7 +17,7 @@ class LeaveType(str, enum.Enum):
     PATERNITY = "Paternity"
     EMERGENCY = "Emergency"
 
-class LeaveRequest(LeaveBase):
+class LeaveRequest(Base):
     __tablename__ = "leave_requests"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -33,7 +30,4 @@ class LeaveRequest(LeaveBase):
     status = Column(String(20), default=LeaveStatus.PENDING.value, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now())
 
-    # Indexes
-    __table_args__ = (
-        {'extend_existing': True}
-    )
+    __table_args__ = ({"extend_existing": True},)

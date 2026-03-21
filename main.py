@@ -8,9 +8,14 @@ from models import user, attendance, leave, payroll
 from models.leave_request import LeaveRequest
 
 # Import routers
-from routers import auth, employees, attendance, leaves, payroll
-from routers import employees_db  # Database-compatible version
-from routers import leave_requests
+from routers import (
+    auth_routes,
+    attendance_routes,
+    employees_routes,
+    leave_requests_routes,
+    leaves_routes,
+    payroll_routes,
+)
 # Create database tables
 # user.Base.metadata.create_all(bind=engine)  # Temporarily disabled
 LeaveRequest.__table__.create(bind=engine, checkfirst=True)  # Create leave_requests table
@@ -35,12 +40,12 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth.router)
-app.include_router(employees_db.router)  # Use database-compatible version
-app.include_router(leave_requests.router)  # Add leave requests router
-app.include_router(attendance.router)
-app.include_router(leaves.router)
-app.include_router(payroll.router)
+app.include_router(auth_routes.router)
+app.include_router(employees_routes.router)
+app.include_router(leave_requests_routes.router)  # Add leave requests router
+app.include_router(attendance_routes.router)
+app.include_router(leaves_routes.router)
+app.include_router(payroll_routes.router)
 
 @app.get("/")
 def read_root():

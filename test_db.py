@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from db.database import engine, SessionLocal
-from app.models.employee_simple import EmployeeSimple
+from models.employee import Employee
 from sqlalchemy import text
 
 def test_database():
@@ -23,7 +23,7 @@ def test_database():
     # Test query
     try:
         db = SessionLocal()
-        employees = db.query(EmployeeSimple).all()
+        employees = db.query(Employee).all()
         print(f"✅ Found {len(employees)} employees")
         
         for emp in employees:
