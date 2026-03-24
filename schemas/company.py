@@ -8,6 +8,7 @@ class CompanyBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     slug: str = Field(..., min_length=1, max_length=100)
     email: Optional[str] = None
+    address: Optional[str] = None
     phone: Optional[str] = None
 
 
@@ -25,6 +26,7 @@ class CompanyRegistrationRequest(BaseModel):
     company_name: str = Field(..., min_length=2, max_length=255)
     company_slug: str = Field(..., min_length=2, max_length=100)
     company_email: str = Field(..., min_length=5, max_length=255)
+    company_address: Optional[str] = Field(None, max_length=255)
     company_phone: Optional[str] = Field(None, max_length=20)
     admin_full_name: str = Field(..., min_length=2, max_length=255)
     admin_email: str = Field(..., min_length=5, max_length=255)

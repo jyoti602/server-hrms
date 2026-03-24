@@ -12,6 +12,7 @@ class Company(Base):
     name = Column(String(255), nullable=False, unique=True, index=True)
     slug = Column(String(100), nullable=False, unique=True, index=True)
     email = Column(String(255), nullable=True)
+    address = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

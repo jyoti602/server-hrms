@@ -6,7 +6,6 @@ from auth.auth import get_password_hash
 from db.database import get_db
 from models.company import Company
 from models.department import Department
-from models.leave_type_option import LeaveTypeOption
 from models.tenant_database import TenantDatabase
 from models.user import User, UserRole
 from tenant_context import get_request_company
@@ -58,6 +57,7 @@ def register_company(
         name=company_name,
         slug=normalized_slug,
         email=company_email,
+        address=payload.company_address.strip() if payload.company_address else None,
         phone=payload.company_phone.strip() if payload.company_phone else None,
         is_active=True,
     )
@@ -113,5 +113,6 @@ def register_company(
         "company_slug": company.slug,
         "tenant_db_name": tenant_database["db_name"],
         "admin_username": admin_user.username,
+        "company_address": company.address,
         "message": "Company workspace created successfully",
     }

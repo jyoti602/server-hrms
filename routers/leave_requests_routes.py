@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 
 from auth.auth import get_current_active_user, require_role
 from db.database import get_db
-from models.leave_request import LeaveRequest, LeaveStatus
-from models.leave_type_option import LeaveTypeOption
 from models.user import User, UserRole
 from tenant_context import get_tenant_db_session
 from tenant_models.employee import Employee
+from tenant_models.leave_request import LeaveRequest, LeaveStatus
+from tenant_models.leave_type_option import LeaveTypeOption
 from schemas.leave_request import (
     LeaveRequestCreate,
     LeaveRequestResponse,
@@ -51,12 +51,11 @@ def validate_leave_dates(from_date, to_date):
         )
 
 
-def validate_leave_type_exists(db: Session, leave_type_name: str, company_id: int):
+def validate_leave_type_exists(db: Session, leave_type_name: str):
     leave_type = (
         db.query(LeaveTypeOption)
         .filter(
             LeaveTypeOption.name == leave_type_name.strip(),
-            LeaveTypeOption.company_id == company_id,
             LeaveTypeOption.is_active.is_(True),
         )
         .first()
@@ -77,10 +76,10 @@ def get_all_leave_requests_admin(
     ),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
-    query = db.query(LeaveRequest).filter(LeaveRequest.company_id == current_user.company_id)
+    query = db.query(LeaveRequest)
 
     if status_filter:
         query = query.filter(LeaveRequest.status == status_filter.value)
@@ -93,15 +92,12 @@ def update_leave_status(
     leave_id: int,
     status_value: LeaveStatus = Query(..., alias="status", description="New status"),
     admin_comment: Optional[str] = Query(None, max_length=1000),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     leave_request = (
         db.query(LeaveRequest)
-        .filter(
-            LeaveRequest.id == leave_id,
-            LeaveRequest.company_id == current_user.company_id,
-        )
+        .filter(LeaveRequest.id == leave_id)
         .first()
     )
     if not leave_request:
@@ -119,13 +115,13 @@ def update_leave_status(
 @router.post("/", response_model=LeaveRequestResponse, status_code=status.HTTP_201_CREATED)
 def create_leave_request(
     leave_request: LeaveRequestCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
     validate_leave_dates(leave_request.from_date, leave_request.to_date)
     normalized_leave_type = leave_request.leave_type.strip()
-    validate_leave_type_exists(db, normalized_leave_type, current_user.company_id)
+    validate_leave_type_exists(db, normalized_leave_type)
 
     if current_user.role == UserRole.EMPLOYEE:
         employee = get_employee_for_user(tenant_db, current_user)
@@ -145,7 +141,6 @@ def create_leave_request(
             raise HTTPException(status_code=404, detail="Employee not found")
 
     db_leave_request = LeaveRequest(
-        company_id=current_user.company_id,
         employee_id=str(employee.id),
         employee_name=employee.name,
         leave_type=normalized_leave_type,
@@ -169,11 +164,11 @@ def get_leave_requests(
     status_filter: Optional[LeaveStatus] = Query(None, alias="status", description="Filter by status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
-    query = db.query(LeaveRequest).filter(LeaveRequest.company_id == current_user.company_id)
+    query = db.query(LeaveRequest)
 
     if current_user.role == UserRole.EMPLOYEE:
         employee = get_employee_for_user(tenant_db, current_user)
@@ -194,7 +189,7 @@ def get_employee_leave_requests(
     employee_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
@@ -205,10 +200,7 @@ def get_employee_leave_requests(
 
     return (
         db.query(LeaveRequest)
-        .filter(
-            LeaveRequest.employee_id == employee_id,
-            LeaveRequest.company_id == current_user.company_id,
-        )
+        .filter(LeaveRequest.employee_id == employee_id)
         .order_by(LeaveRequest.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -219,16 +211,13 @@ def get_employee_leave_requests(
 @router.get("/{leave_id}", response_model=LeaveRequestResponse)
 def get_leave_request(
     leave_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
     leave_request = (
         db.query(LeaveRequest)
-        .filter(
-            LeaveRequest.id == leave_id,
-            LeaveRequest.company_id == current_user.company_id,
-        )
+        .filter(LeaveRequest.id == leave_id)
         .first()
     )
     if not leave_request:
@@ -246,16 +235,13 @@ def get_leave_request(
 def update_leave_request(
     leave_id: int,
     leave_update: LeaveRequestUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
     leave_request = (
         db.query(LeaveRequest)
-        .filter(
-            LeaveRequest.id == leave_id,
-            LeaveRequest.company_id == current_user.company_id,
-        )
+        .filter(LeaveRequest.id == leave_id)
         .first()
     )
     if not leave_request:
@@ -285,16 +271,13 @@ def update_leave_request(
 @router.delete("/{leave_id}")
 def delete_leave_request(
     leave_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
     leave_request = (
         db.query(LeaveRequest)
-        .filter(
-            LeaveRequest.id == leave_id,
-            LeaveRequest.company_id == current_user.company_id,
-        )
+        .filter(LeaveRequest.id == leave_id)
         .first()
     )
     if not leave_request:
