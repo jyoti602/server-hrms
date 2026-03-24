@@ -21,11 +21,15 @@ def get_leaves(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    query = db.query(Leave)
+    query = db.query(Leave).filter(Leave.company_id == current_user.company_id)
     
     # Employees can only see their own leaves
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+        employee = (
+            db.query(Employee)
+            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            .first()
+        )
         if employee:
             query = query.filter(Leave.employee_id == employee.id)
         else:
@@ -45,13 +49,21 @@ def get_leave(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    leave = db.query(Leave).filter(Leave.id == leave_id).first()
+    leave = (
+        db.query(Leave)
+        .filter(Leave.id == leave_id, Leave.company_id == current_user.company_id)
+        .first()
+    )
     if not leave:
         raise HTTPException(status_code=404, detail="Leave not found")
     
     # Employees can only view their own leaves
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+        employee = (
+            db.query(Employee)
+            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            .first()
+        )
         if employee and leave.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this leave")
     
@@ -65,13 +77,17 @@ def create_leave(
 ):
     # Employees can only create leaves for themselves
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+        employee = (
+            db.query(Employee)
+            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            .first()
+        )
         if employee:
             leave.employee_id = employee.id
         else:
             raise HTTPException(status_code=404, detail="Employee profile not found")
     
-    db_leave = Leave(**leave.dict())
+    db_leave = Leave(company_id=current_user.company_id, **leave.dict())
     db.add(db_leave)
     db.commit()
     db.refresh(db_leave)
@@ -84,7 +100,11 @@ def update_leave(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    db_leave = db.query(Leave).filter(Leave.id == leave_id).first()
+    db_leave = (
+        db.query(Leave)
+        .filter(Leave.id == leave_id, Leave.company_id == current_user.company_id)
+        .first()
+    )
     if not db_leave:
         raise HTTPException(status_code=404, detail="Leave not found")
     
@@ -94,7 +114,11 @@ def update_leave(
         
         # If approving, set approved_by and approved_at
         if update_data.get("status") == "approved":
-            current_employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+            current_employee = (
+                db.query(Employee)
+                .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+                .first()
+            )
             if current_employee:
                 update_data["approved_by"] = current_employee.id
                 update_data["approved_at"] = datetime.utcnow()
@@ -103,7 +127,11 @@ def update_leave(
             setattr(db_leave, field, value)
     else:
         # Employees can only cancel their own pending leaves
-        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+        employee = (
+            db.query(Employee)
+            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            .first()
+        )
         if employee and db_leave.employee_id == employee.id and db_leave.status == "pending":
             if leave_update.status == "cancelled":
                 db_leave.status = "cancelled"
@@ -122,7 +150,11 @@ def delete_leave(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    db_leave = db.query(Leave).filter(Leave.id == leave_id).first()
+    db_leave = (
+        db.query(Leave)
+        .filter(Leave.id == leave_id, Leave.company_id == current_user.company_id)
+        .first()
+    )
     if not db_leave:
         raise HTTPException(status_code=404, detail="Leave not found")
     
@@ -135,5 +167,9 @@ def get_pending_leaves_count(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    count = db.query(Leave).filter(Leave.status == "pending").count()
+    count = (
+        db.query(Leave)
+        .filter(Leave.company_id == current_user.company_id, Leave.status == "pending")
+        .count()
+    )
     return {"pending_leaves": count}

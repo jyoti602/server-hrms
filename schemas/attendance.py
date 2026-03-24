@@ -10,12 +10,16 @@ class AttendanceBase(BaseModel):
 class AttendanceCreate(AttendanceBase):
     employee_id: int
     check_in: Optional[time] = None
+    lunch_start: Optional[time] = None
+    lunch_end: Optional[time] = None
     check_out: Optional[time] = None
     work_hours: Optional[int] = None
     overtime_hours: Optional[int] = 0
 
 class AttendanceUpdate(BaseModel):
     check_in: Optional[time] = None
+    lunch_start: Optional[time] = None
+    lunch_end: Optional[time] = None
     check_out: Optional[time] = None
     status: Optional[str] = None
     work_hours: Optional[int] = None
@@ -26,6 +30,8 @@ class Attendance(AttendanceBase):
     id: int
     employee_id: int
     check_in: Optional[time] = None
+    lunch_start: Optional[time] = None
+    lunch_end: Optional[time] = None
     check_out: Optional[time] = None
     work_hours: Optional[int] = None
     overtime_hours: int
@@ -34,3 +40,8 @@ class Attendance(AttendanceBase):
 
     class Config:
         from_attributes = True
+
+
+class AttendanceActionResponse(BaseModel):
+    message: str
+    attendance: Attendance

@@ -10,8 +10,11 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from db.database import get_db
+from db.tenant import get_tenant_session_factory
+from models.tenant_database import TenantDatabase
 from models.user import User, UserRole
 from schemas.user import TokenData
+from tenant_models.user import User as TenantUser
 
 load_dotenv()
 
@@ -33,11 +36,30 @@ def get_password_hash(password):
         bcrypt.gensalt(),
     ).decode("utf-8")
 
-def get_user(db: Session, username: str):
-    return db.query(User).filter(User.username == username).first()
+def get_user(db: Session, username: str, company_id: int | None = None):
+    if company_id is not None:
+        tenant_database = (
+            db.query(TenantDatabase)
+            .filter(TenantDatabase.company_id == company_id, TenantDatabase.is_active.is_(True))
+            .first()
+        )
+        if tenant_database:
+            tenant_session = get_tenant_session_factory(tenant_database.db_name)()
+            try:
+                tenant_user = tenant_session.query(TenantUser).filter(TenantUser.username == username).first()
+                if tenant_user:
+                    setattr(tenant_user, "company_id", company_id)
+                    return tenant_user
+            finally:
+                tenant_session.close()
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = get_user(db, username)
+    query = db.query(User).filter(User.username == username)
+    if company_id is not None:
+        query = query.filter(User.company_id == company_id)
+    return query.first()
+
+def authenticate_user(db: Session, username: str, password: str, company_id: int | None = None):
+    user = get_user(db, username, company_id)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -63,12 +85,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        company_id: int | None = payload.get("company_id")
         if username is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        token_data = TokenData(username=username, company_id=company_id)
     except JWTError:
         raise credentials_exception
-    user = get_user(db, username=token_data.username)
+    user = get_user(db, username=token_data.username, company_id=token_data.company_id)
     if user is None:
         raise credentials_exception
     return user

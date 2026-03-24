@@ -7,6 +7,7 @@ class Leave(Base):
     __tablename__ = "leaves"
 
     id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     leave_type = Column(String(50), nullable=False)  # sick, casual, annual, maternity
     start_date = Column(DateTime(timezone=True), nullable=False)
@@ -21,5 +22,6 @@ class Leave(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
+    company = relationship("Company", back_populates="leaves")
     employee = relationship("Employee", back_populates="leaves", foreign_keys=[employee_id])
     approver = relationship("Employee", back_populates="approved_leaves", foreign_keys=[approved_by])

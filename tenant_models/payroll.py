@@ -1,15 +1,15 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.sql import func
-from db.database import Base
 
-class Payroll(Base):
+from db.tenant import TenantBase
+
+
+class Payroll(TenantBase):
     __tablename__ = "payrolls"
 
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    month = Column(String(20), nullable=False)  # "2024-01"
+    month = Column(String(20), nullable=False)
     basic_salary = Column(Float, nullable=False)
     allowances = Column(Float, default=0)
     deductions = Column(Float, default=0)
@@ -17,11 +17,7 @@ class Payroll(Base):
     bonus = Column(Float, default=0)
     net_salary = Column(Float, nullable=False)
     payment_date = Column(DateTime(timezone=True))
-    status = Column(String(50), default="pending")  # pending, processed, paid
-    payment_method = Column(String(50))  # bank_transfer, cash, check
+    status = Column(String(50), default="pending")
+    payment_method = Column(String(50))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Relationships
-    company = relationship("Company", back_populates="payrolls")
-    employee = relationship("Employee", back_populates="payrolls")

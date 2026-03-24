@@ -16,8 +16,9 @@ class Employee(Base):
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, index=True, nullable=False)
     phone = Column(String(20))
     department = Column(String, nullable=False)
     position = Column(String, nullable=False)
@@ -34,6 +35,7 @@ class Employee(Base):
     )
 
     # Relationships
+    company = relationship("Company", back_populates="employees")
     attendance = relationship("Attendance", back_populates="employee")
     leaves = relationship("Leave", back_populates="employee", foreign_keys="Leave.employee_id")
     approved_leaves = relationship("Leave", back_populates="approver", foreign_keys="Leave.approved_by")

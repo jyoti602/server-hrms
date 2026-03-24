@@ -1,31 +1,24 @@
 import enum
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Date, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
-from db.database import Base
+
+from db.tenant import TenantBase
+
 
 class LeaveStatus(str, enum.Enum):
     PENDING = "Pending"
     APPROVED = "Approved"
     REJECTED = "Rejected"
 
-class LeaveType(str, enum.Enum):
-    CASUAL = "Casual"
-    SICK = "Sick"
-    ANNUAL = "Annual"
-    MATERNITY = "Maternity"
-    PATERNITY = "Paternity"
-    EMERGENCY = "Emergency"
 
-class LeaveRequest(Base):
+class LeaveRequest(TenantBase):
     __tablename__ = "leave_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     employee_id = Column(String(50), nullable=False, index=True)
     employee_name = Column(String(100), nullable=False)
-    leave_type = Column(String(50), nullable=False, index=True)
+    leave_type = Column(String(100), nullable=False, index=True)
     from_date = Column(Date, nullable=False)
     to_date = Column(Date, nullable=False)
     reason = Column(Text, nullable=False)
@@ -34,7 +27,3 @@ class LeaveRequest(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     reviewed_at = Column(DateTime, nullable=True)
     admin_comment = Column(Text, nullable=True)
-
-    company = relationship("Company", back_populates="leave_requests")
-
-    __table_args__ = ({"extend_existing": True},)

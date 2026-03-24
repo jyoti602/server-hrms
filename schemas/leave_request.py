@@ -1,27 +1,18 @@
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, Field
 
 class LeaveStatus(str, Enum):
     PENDING = "Pending"
     APPROVED = "Approved"
     REJECTED = "Rejected"
 
-class LeaveType(str, Enum):
-    CASUAL = "Casual"
-    SICK = "Sick"
-    ANNUAL = "Annual"
-    MATERNITY = "Maternity"
-    PATERNITY = "Paternity"
-    EMERGENCY = "Emergency"
-
 class LeaveRequestBase(BaseModel):
-    employee_id: str = Field(..., max_length=50, description="ID of the employee")
-    employee_name: str = Field(..., min_length=1, max_length=100, description="Name of the employee")
-    leave_type: LeaveType = Field(..., description="Type of leave")
-    from_date: datetime = Field(..., description="Start date of leave")
-    to_date: datetime = Field(..., description="End date of leave")
+    leave_type: str = Field(..., min_length=1, max_length=100, description="Type of leave")
+    from_date: date = Field(..., description="Start date of leave")
+    to_date: date = Field(..., description="End date of leave")
     reason: str = Field(..., min_length=10, max_length=1000, description="Reason for leave")
 
     class Config:
@@ -30,10 +21,12 @@ class LeaveRequestBase(BaseModel):
         exclude = {'_sa_instance_state'}
 
 class LeaveRequestCreate(LeaveRequestBase):
-    pass
+    employee_id: Optional[str] = Field(None, max_length=50, description="ID of the employee")
+    employee_name: Optional[str] = Field(None, min_length=1, max_length=100, description="Name of the employee")
 
 class LeaveRequestUpdate(BaseModel):
     status: Optional[LeaveStatus] = None
+    admin_comment: Optional[str] = Field(None, max_length=1000)
 
     class Config:
         from_attributes = True
@@ -42,8 +35,13 @@ class LeaveRequestUpdate(BaseModel):
 
 class LeaveRequestResponse(LeaveRequestBase):
     id: int
+    employee_id: str
+    employee_name: str
     status: LeaveStatus
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    admin_comment: Optional[str] = None
 
     class Config:
         from_attributes = True

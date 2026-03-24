@@ -21,11 +21,15 @@ def get_payrolls(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    query = db.query(Payroll)
+    query = db.query(Payroll).filter(Payroll.company_id == current_user.company_id)
     
     # Employees can only see their own payroll
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+        employee = (
+            db.query(Employee)
+            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            .first()
+        )
         if employee:
             query = query.filter(Payroll.employee_id == employee.id)
         else:
@@ -45,13 +49,21 @@ def get_payroll(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    payroll = db.query(Payroll).filter(Payroll.id == payroll_id).first()
+    payroll = (
+        db.query(Payroll)
+        .filter(Payroll.id == payroll_id, Payroll.company_id == current_user.company_id)
+        .first()
+    )
     if not payroll:
         raise HTTPException(status_code=404, detail="Payroll not found")
     
     # Employees can only view their own payroll
     if current_user.role == UserRole.EMPLOYEE:
-        employee = db.query(Employee).filter(Employee.email == current_user.email).first()
+        employee = (
+            db.query(Employee)
+            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            .first()
+        )
         if employee and payroll.employee_id != employee.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this payroll")
     
@@ -65,6 +77,7 @@ def create_payroll(
 ):
     # Check if payroll already exists for this employee and month
     existing_payroll = db.query(Payroll).filter(
+        Payroll.company_id == current_user.company_id,
         Payroll.employee_id == payroll.employee_id,
         Payroll.month == payroll.month
     ).first()
@@ -75,7 +88,7 @@ def create_payroll(
             detail="Payroll already exists for this employee and month"
         )
     
-    db_payroll = Payroll(**payroll.dict())
+    db_payroll = Payroll(company_id=current_user.company_id, **payroll.dict())
     db.add(db_payroll)
     db.commit()
     db.refresh(db_payroll)
@@ -88,7 +101,11 @@ def update_payroll(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    db_payroll = db.query(Payroll).filter(Payroll.id == payroll_id).first()
+    db_payroll = (
+        db.query(Payroll)
+        .filter(Payroll.id == payroll_id, Payroll.company_id == current_user.company_id)
+        .first()
+    )
     if not db_payroll:
         raise HTTPException(status_code=404, detail="Payroll not found")
     
@@ -106,7 +123,11 @@ def delete_payroll(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    db_payroll = db.query(Payroll).filter(Payroll.id == payroll_id).first()
+    db_payroll = (
+        db.query(Payroll)
+        .filter(Payroll.id == payroll_id, Payroll.company_id == current_user.company_id)
+        .first()
+    )
     if not db_payroll:
         raise HTTPException(status_code=404, detail="Payroll not found")
     
@@ -120,7 +141,11 @@ def get_monthly_payroll_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
-    payrolls = db.query(Payroll).filter(Payroll.month == month).all()
+    payrolls = (
+        db.query(Payroll)
+        .filter(Payroll.company_id == current_user.company_id, Payroll.month == month)
+        .all()
+    )
     
     total_payroll = sum(p.net_salary for p in payrolls)
     total_employees = len(payrolls)
@@ -143,18 +168,27 @@ def generate_bulk_payroll(
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     # Get all active employees
-    employees = db.query(Employee).filter(Employee.status == EmployeeStatus.ACTIVE.value).all()
+    employees = (
+        db.query(Employee)
+        .filter(
+            Employee.company_id == current_user.company_id,
+            Employee.status == EmployeeStatus.ACTIVE.value,
+        )
+        .all()
+    )
     
     created_payrolls = []
     for employee in employees:
         # Check if payroll already exists
         existing = db.query(Payroll).filter(
+            Payroll.company_id == current_user.company_id,
             Payroll.employee_id == employee.id,
             Payroll.month == month
         ).first()
         
         if not existing:
             payroll = Payroll(
+                company_id=current_user.company_id,
                 employee_id=employee.id,
                 month=month,
                 basic_salary=0,
