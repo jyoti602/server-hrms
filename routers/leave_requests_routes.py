@@ -67,6 +67,30 @@ def validate_leave_type_exists(db: Session, leave_type_name: str):
         )
 
 
+def validate_no_overlapping_leave_request(
+    db: Session,
+    employee_id: str,
+    from_date,
+    to_date,
+):
+    has_overlap = (
+        db.query(LeaveRequest.id)
+        .filter(
+            LeaveRequest.employee_id == employee_id,
+            LeaveRequest.status.in_([LeaveStatus.PENDING.value, LeaveStatus.APPROVED.value]),
+            LeaveRequest.from_date <= to_date,
+            LeaveRequest.to_date >= from_date,
+        )
+        .first()
+    )
+
+    if has_overlap:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have a leave request for the selected date range",
+        )
+
+
 @router.get("/all", response_model=List[LeaveRequestResponse])
 def get_all_leave_requests_admin(
     status_filter: Optional[LeaveStatus] = Query(
@@ -139,6 +163,13 @@ def create_leave_request(
         employee = get_employee_by_id(tenant_db, employee_id)
         if not employee:
             raise HTTPException(status_code=404, detail="Employee not found")
+
+    validate_no_overlapping_leave_request(
+        db,
+        employee_id=str(employee.id),
+        from_date=leave_request.from_date,
+        to_date=leave_request.to_date,
+    )
 
     db_leave_request = LeaveRequest(
         employee_id=str(employee.id),

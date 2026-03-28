@@ -6,12 +6,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 
 from db.database import SessionLocal, engine, get_db
-from models import attendance, leave, payroll, user
-from models.attendance import Attendance
 from models.company import Company
 from models.department import Department
-from models.leave import Leave
-from models.payroll import Payroll
+from models.user import User
 from models.tenant_database import TenantDatabase
 from tenant_context import extract_tenant_slug, get_company_by_slug
 
@@ -27,13 +24,10 @@ from routers import (
     payroll_routes,
 )
 # Create database tables
-# user.Base.metadata.create_all(bind=engine)  # Temporarily disabled
 Company.__table__.create(bind=engine, checkfirst=True)
 TenantDatabase.__table__.create(bind=engine, checkfirst=True)
-Attendance.__table__.create(bind=engine, checkfirst=True)
-Leave.__table__.create(bind=engine, checkfirst=True)
-Payroll.__table__.create(bind=engine, checkfirst=True)
 Department.__table__.create(bind=engine, checkfirst=True)
+User.__table__.create(bind=engine, checkfirst=True)
 
 
 def ensure_default_company() -> int:
@@ -111,58 +105,63 @@ def ensure_company_columns(default_company_id: int):
 
 def ensure_multitenant_indexes():
     with engine.begin() as connection:
-        employee_indexes = connection.execute(text("SHOW INDEX FROM employees")).mappings().all()
-        user_indexes = connection.execute(text("SHOW INDEX FROM users")).mappings().all()
-        department_indexes = connection.execute(text("SHOW INDEX FROM departments")).mappings().all()
-        if any(
-            index["Key_name"] == "ix_users_email" and index["Non_unique"] == 0
-            for index in user_indexes
-        ):
-            connection.execute(text("ALTER TABLE users DROP INDEX ix_users_email"))
+        inspector = inspect(engine)
 
-        if any(
-            index["Key_name"] == "ix_users_username" and index["Non_unique"] == 0
-            for index in user_indexes
-        ):
-            connection.execute(text("ALTER TABLE users DROP INDEX ix_users_username"))
+        if inspector.has_table("users"):
+            user_indexes = connection.execute(text("SHOW INDEX FROM users")).mappings().all()
+            if any(
+                index["Key_name"] == "ix_users_email" and index["Non_unique"] == 0
+                for index in user_indexes
+            ):
+                connection.execute(text("ALTER TABLE users DROP INDEX ix_users_email"))
 
-        existing_user_index_names = {index["Key_name"] for index in user_indexes}
-        if "uq_users_company_email" not in existing_user_index_names:
-            connection.execute(
-                text(
-                    "CREATE UNIQUE INDEX uq_users_company_email "
-                    "ON users (company_id, email)"
+            if any(
+                index["Key_name"] == "ix_users_username" and index["Non_unique"] == 0
+                for index in user_indexes
+            ):
+                connection.execute(text("ALTER TABLE users DROP INDEX ix_users_username"))
+
+            existing_user_index_names = {index["Key_name"] for index in user_indexes}
+            if "uq_users_company_email" not in existing_user_index_names:
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX uq_users_company_email "
+                        "ON users (company_id, email)"
+                    )
                 )
-            )
-        if "uq_users_company_username" not in existing_user_index_names:
-            connection.execute(
-                text(
-                    "CREATE UNIQUE INDEX uq_users_company_username "
-                    "ON users (company_id, username)"
+            if "uq_users_company_username" not in existing_user_index_names:
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX uq_users_company_username "
+                        "ON users (company_id, username)"
+                    )
                 )
-            )
 
-        if any(
-            index["Key_name"] == "email" and index["Non_unique"] == 0
-            for index in employee_indexes
-        ):
-            connection.execute(text("ALTER TABLE employees DROP INDEX email"))
+        if inspector.has_table("employees"):
+            employee_indexes = connection.execute(text("SHOW INDEX FROM employees")).mappings().all()
+            if any(
+                index["Key_name"] == "email" and index["Non_unique"] == 0
+                for index in employee_indexes
+            ):
+                connection.execute(text("ALTER TABLE employees DROP INDEX email"))
 
-        existing_employee_index_names = {index["Key_name"] for index in employee_indexes}
-        if "uq_employees_company_email" not in existing_employee_index_names:
-            connection.execute(
-                text(
-                    "CREATE UNIQUE INDEX uq_employees_company_email "
-                    "ON employees (company_id, email)"
+            existing_employee_index_names = {index["Key_name"] for index in employee_indexes}
+            if "uq_employees_company_email" not in existing_employee_index_names:
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX uq_employees_company_email "
+                        "ON employees (company_id, email)"
+                    )
                 )
-            )
 
-        if any(
-            index["Key_name"] == "ix_departments_name" and index["Non_unique"] == 0
-            for index in department_indexes
-        ):
-            connection.execute(text("DROP INDEX ix_departments_name ON departments"))
-            connection.execute(text("CREATE INDEX ix_departments_name ON departments (name)"))
+        if inspector.has_table("departments"):
+            department_indexes = connection.execute(text("SHOW INDEX FROM departments")).mappings().all()
+            if any(
+                index["Key_name"] == "ix_departments_name" and index["Non_unique"] == 0
+                for index in department_indexes
+            ):
+                connection.execute(text("DROP INDEX ix_departments_name ON departments"))
+                connection.execute(text("CREATE INDEX ix_departments_name ON departments (name)"))
 default_company_id = ensure_default_company()
 ensure_company_base_columns()
 ensure_company_columns(default_company_id)
@@ -181,14 +180,7 @@ def seed_master_data():
                 "Sales",
                 "Operations",
             ]
-            existing_employee_departments = {
-                value[0]
-                for value in db.execute(
-                    text("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL")
-                ).all()
-                if value[0]
-            }
-            for department_name in sorted(set(default_departments) | existing_employee_departments):
+            for department_name in default_departments:
                 db.add(
                     Department(
                         company_id=default_company_id,

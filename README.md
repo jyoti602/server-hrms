@@ -80,6 +80,16 @@ Once the server is running, visit:
 - `POST /auth/register` - Register new user
 - `POST /auth/login` - Login and get access token
 
+Login accepts either JSON or form data. Include `company_slug` when the frontend is deployed on a shared domain:
+
+```json
+{
+  "username": "admin",
+  "password": "secret",
+  "company_slug": "it-technology"
+}
+```
+
 ### Employees (Admin only for full access)
 - `GET /employees` - List all employees
 - `GET /employees/{id}` - Get employee by ID

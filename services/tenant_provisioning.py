@@ -10,6 +10,7 @@ from db.tenant import (
 )
 from tenant_models.department import Department
 from tenant_models.leave_type_option import LeaveTypeOption
+from tenant_models.payroll import Payroll
 from tenant_models.user import User, UserRole
 
 

@@ -1,16 +1,29 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from db.database import get_db
-from models.employee import Employee, EmployeeStatus
-from models.payroll import Payroll
+from db.tenant import TenantBase
 from models.user import User, UserRole
+from tenant_context import get_tenant_db_session
+from tenant_models.employee import Employee as TenantEmployee, EmployeeStatus
+from tenant_models.payroll import Payroll as TenantPayroll
 from schemas.payroll import Payroll as PayrollSchema, PayrollCreate, PayrollUpdate
 from auth.auth import get_current_active_user, require_role
 
 router = APIRouter(prefix="/payroll", tags=["payroll"])
+
+
+def get_current_tenant_db(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    yield from get_tenant_db_session(current_user.company_id, db)
+
+
+def ensure_tenant_payroll_schema(db: Session):
+    TenantBase.metadata.create_all(bind=db.get_bind())
+
 
 @router.get("/", response_model=List[PayrollSchema])
 def get_payrolls(
@@ -18,27 +31,28 @@ def get_payrolls(
     limit: int = 100,
     employee_id: Optional[int] = None,
     month: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    query = db.query(Payroll).filter(Payroll.company_id == current_user.company_id)
+    ensure_tenant_payroll_schema(db)
+    query = db.query(TenantPayroll)
     
     # Employees can only see their own payroll
     if current_user.role == UserRole.EMPLOYEE:
         employee = (
-            db.query(Employee)
-            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            db.query(TenantEmployee)
+            .filter(TenantEmployee.email == current_user.email)
             .first()
         )
         if employee:
-            query = query.filter(Payroll.employee_id == employee.id)
+            query = query.filter(TenantPayroll.employee_id == employee.id)
         else:
             return []
     elif employee_id:
-        query = query.filter(Payroll.employee_id == employee_id)
+        query = query.filter(TenantPayroll.employee_id == employee_id)
     
     if month:
-        query = query.filter(Payroll.month == month)
+        query = query.filter(TenantPayroll.month == month)
     
     payrolls = query.offset(skip).limit(limit).all()
     return payrolls
@@ -46,12 +60,13 @@ def get_payrolls(
 @router.get("/{payroll_id}", response_model=PayrollSchema)
 def get_payroll(
     payroll_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    ensure_tenant_payroll_schema(db)
     payroll = (
-        db.query(Payroll)
-        .filter(Payroll.id == payroll_id, Payroll.company_id == current_user.company_id)
+        db.query(TenantPayroll)
+        .filter(TenantPayroll.id == payroll_id)
         .first()
     )
     if not payroll:
@@ -60,8 +75,8 @@ def get_payroll(
     # Employees can only view their own payroll
     if current_user.role == UserRole.EMPLOYEE:
         employee = (
-            db.query(Employee)
-            .filter(Employee.email == current_user.email, Employee.company_id == current_user.company_id)
+            db.query(TenantEmployee)
+            .filter(TenantEmployee.email == current_user.email)
             .first()
         )
         if employee and payroll.employee_id != employee.id:
@@ -72,14 +87,18 @@ def get_payroll(
 @router.post("/", response_model=PayrollSchema)
 def create_payroll(
     payroll: PayrollCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
+    ensure_tenant_payroll_schema(db)
+    employee = db.query(TenantEmployee).filter(TenantEmployee.id == payroll.employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
     # Check if payroll already exists for this employee and month
-    existing_payroll = db.query(Payroll).filter(
-        Payroll.company_id == current_user.company_id,
-        Payroll.employee_id == payroll.employee_id,
-        Payroll.month == payroll.month
+    existing_payroll = db.query(TenantPayroll).filter(
+        TenantPayroll.employee_id == payroll.employee_id,
+        TenantPayroll.month == payroll.month
     ).first()
     
     if existing_payroll:
@@ -88,7 +107,7 @@ def create_payroll(
             detail="Payroll already exists for this employee and month"
         )
     
-    db_payroll = Payroll(company_id=current_user.company_id, **payroll.dict())
+    db_payroll = TenantPayroll(**payroll.dict())
     db.add(db_payroll)
     db.commit()
     db.refresh(db_payroll)
@@ -98,12 +117,13 @@ def create_payroll(
 def update_payroll(
     payroll_id: int,
     payroll_update: PayrollUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
+    ensure_tenant_payroll_schema(db)
     db_payroll = (
-        db.query(Payroll)
-        .filter(Payroll.id == payroll_id, Payroll.company_id == current_user.company_id)
+        db.query(TenantPayroll)
+        .filter(TenantPayroll.id == payroll_id)
         .first()
     )
     if not db_payroll:
@@ -120,12 +140,13 @@ def update_payroll(
 @router.delete("/{payroll_id}")
 def delete_payroll(
     payroll_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
+    ensure_tenant_payroll_schema(db)
     db_payroll = (
-        db.query(Payroll)
-        .filter(Payroll.id == payroll_id, Payroll.company_id == current_user.company_id)
+        db.query(TenantPayroll)
+        .filter(TenantPayroll.id == payroll_id)
         .first()
     )
     if not db_payroll:
@@ -138,12 +159,13 @@ def delete_payroll(
 @router.get("/monthly/{month}")
 def get_monthly_payroll_summary(
     month: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
+    ensure_tenant_payroll_schema(db)
     payrolls = (
-        db.query(Payroll)
-        .filter(Payroll.company_id == current_user.company_id, Payroll.month == month)
+        db.query(TenantPayroll)
+        .filter(TenantPayroll.month == month)
         .all()
     )
     
@@ -164,15 +186,15 @@ def get_monthly_payroll_summary(
 @router.post("/generate-bulk")
 def generate_bulk_payroll(
     month: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_current_tenant_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
+    ensure_tenant_payroll_schema(db)
     # Get all active employees
     employees = (
-        db.query(Employee)
+        db.query(TenantEmployee)
         .filter(
-            Employee.company_id == current_user.company_id,
-            Employee.status == EmployeeStatus.ACTIVE.value,
+            TenantEmployee.status == EmployeeStatus.ACTIVE.value,
         )
         .all()
     )
@@ -180,15 +202,13 @@ def generate_bulk_payroll(
     created_payrolls = []
     for employee in employees:
         # Check if payroll already exists
-        existing = db.query(Payroll).filter(
-            Payroll.company_id == current_user.company_id,
-            Payroll.employee_id == employee.id,
-            Payroll.month == month
+        existing = db.query(TenantPayroll).filter(
+            TenantPayroll.employee_id == employee.id,
+            TenantPayroll.month == month
         ).first()
         
         if not existing:
-            payroll = Payroll(
-                company_id=current_user.company_id,
+            payroll = TenantPayroll(
                 employee_id=employee.id,
                 month=month,
                 basic_salary=0,

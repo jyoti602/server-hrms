@@ -18,6 +18,7 @@ class UserCreate(UserBase):
 class UserLogin(BaseModel):
     username: str
     password: str
+    company_slug: Optional[str] = None
 
 class User(UserBase):
     id: int

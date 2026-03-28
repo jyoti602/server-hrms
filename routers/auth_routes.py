@@ -1,14 +1,14 @@
 from datetime import timedelta
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from db.database import get_db
 from models.company import Company
 from models.user import User
 from tenant_context import get_request_company
-from schemas.user import UserCreate, User as UserSchema, Token
+from schemas.user import UserCreate, UserLogin, User as UserSchema, Token
 from auth.auth import (
     authenticate_user, create_access_token, get_password_hash,
     ACCESS_TOKEN_EXPIRE_MINUTES
@@ -25,6 +25,66 @@ def get_default_company(db: Session) -> Company:
         db.commit()
         db.refresh(company)
     return company
+
+
+def normalize_company_slug(value: str) -> str:
+    return value.strip().lower().replace(" ", "-")
+
+
+def resolve_login_company(
+    db: Session,
+    company_slug: str | None,
+) -> Company | None:
+    if company_slug:
+        company = (
+            db.query(Company)
+            .filter(Company.slug == normalize_company_slug(company_slug), Company.is_active.is_(True))
+            .first()
+        )
+        if not company:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Company workspace not found",
+            )
+        return company
+
+    return get_default_company(db)
+
+
+async def parse_login_payload(request: Request) -> UserLogin:
+    content_type = request.headers.get("content-type", "").lower()
+    raw_payload = {}
+
+    if "application/json" in content_type or content_type.startswith("text/plain"):
+        raw_body = (await request.body()).decode("utf-8").strip()
+        if raw_body:
+            try:
+                raw_payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                raw_payload = {}
+
+    if not raw_payload:
+        raw_payload = dict(await request.form())
+
+    username = (raw_payload.get("username") or "").strip()
+    password = raw_payload.get("password") or ""
+    company_slug = (
+        (raw_payload.get("company_slug") or "").strip()
+        or request.headers.get("x-tenant-slug", "").strip()
+        or None
+    )
+
+    if not username or not password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username and password are required",
+        )
+
+    return UserLogin(
+        username=username,
+        password=password,
+        company_slug=company_slug,
+    )
 
 @router.post("/register", response_model=UserSchema)
 def register(
@@ -72,23 +132,14 @@ def register(
     return db_user
 
 @router.post("/login", response_model=Token)
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    request: Request = None,
+async def login(
+    request: Request,
     db: Session = Depends(get_db),
-    current_company: Company | None = Depends(get_request_company),
 ):
-    company = current_company
-    if company is None and request is not None and request.headers.get("host", "").split(":")[0] in {"localhost", "127.0.0.1"}:
-        company = get_default_company(db)
+    payload = await parse_login_payload(request)
+    company = resolve_login_company(db, payload.company_slug)
 
-    if company is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tenant context is required. Use the company domain or send X-Tenant-Slug.",
-        )
-
-    user = authenticate_user(db, form_data.username, form_data.password, company.id)
+    user = authenticate_user(db, payload.username, payload.password, company.id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

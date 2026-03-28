@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,7 @@ class LeaveRequestBase(BaseModel):
         exclude = {'_sa_instance_state'}
 
 class LeaveRequestCreate(LeaveRequestBase):
-    employee_id: Optional[str] = Field(None, max_length=50, description="ID of the employee")
+    employee_id: Optional[Union[str, int]] = Field(None, description="ID of the employee")
     employee_name: Optional[str] = Field(None, min_length=1, max_length=100, description="Name of the employee")
 
 class LeaveRequestUpdate(BaseModel):
