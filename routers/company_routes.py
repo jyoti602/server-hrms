@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from auth.auth import get_password_hash
@@ -72,13 +72,20 @@ def register_company(
             )
 
         hashed_password = get_password_hash(payload.password)
-        tenant_database = provision_tenant_database(
-            company_slug=normalized_slug,
-            admin_email=admin_email,
-            admin_username=admin_username,
-            admin_full_name=admin_full_name,
-            hashed_password=hashed_password,
-        )
+        try:
+            tenant_database = provision_tenant_database(
+                company_slug=normalized_slug,
+                admin_email=admin_email,
+                admin_username=admin_username,
+                admin_full_name=admin_full_name,
+                hashed_password=hashed_password,
+            )
+        except OperationalError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="Unable to create tenant database. Check MySQL CREATE DATABASE privileges and tenant connection settings.",
+            ) from exc
 
         db.add(
             TenantDatabase(

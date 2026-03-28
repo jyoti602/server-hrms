@@ -32,8 +32,16 @@ def build_tenant_database_url(database_name: str) -> str:
     )
 
 
+def build_server_database_url() -> str:
+    password = quote_plus(TENANT_DB_PASSWORD)
+    return (
+        f"mysql+pymysql://{TENANT_DB_USER}:{password}"
+        f"@{TENANT_DB_HOST}:{TENANT_DB_PORT}/"
+    )
+
+
 def get_server_engine():
-    return create_engine(build_tenant_database_url(TENANT_SERVER_DATABASE))
+    return create_engine(build_server_database_url())
 
 
 def ensure_tenant_database(database_name: str):

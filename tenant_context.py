@@ -22,10 +22,6 @@ def extract_tenant_slug(request: Request) -> Optional[str]:
     if host.endswith(".localhost"):
         return host[: -len(".localhost")] or None
 
-    parts = host.split(".")
-    if len(parts) >= 3:
-        return parts[0]
-
     return None
 
 
