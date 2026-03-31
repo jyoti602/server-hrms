@@ -2,15 +2,23 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth.auth import get_current_active_user, require_role
 from db.database import get_db
 from models.user import User, UserRole
+from services.service_email import (
+    SMTPConnectionFailure,
+    SMTPConfigurationError,
+    InvalidEmailError,
+    send_leave_application_notification,
+)
 from tenant_context import get_tenant_db_session
 from tenant_models.employee import Employee
 from tenant_models.leave_request import LeaveRequest, LeaveStatus
 from tenant_models.leave_type_option import LeaveTypeOption
+from tenant_models.user import User as TenantUser, UserRole as TenantUserRole
 from schemas.leave_request import (
     LeaveRequestCreate,
     LeaveRequestResponse,
@@ -41,6 +49,18 @@ def get_employee_for_user(db: Session, user: User) -> Optional[Employee]:
         .filter(Employee.email == user.email)
         .first()
     )
+
+
+def get_admin_emails(db: Session) -> list[str]:
+    admins = (
+        db.query(TenantUser.email)
+        .filter(
+            TenantUser.role == TenantUserRole.ADMIN,
+            TenantUser.is_active.is_(True),
+        )
+        .all()
+    )
+    return [email for (email,) in admins if email]
 
 
 def validate_leave_dates(from_date, to_date):
@@ -184,7 +204,25 @@ def create_leave_request(
     )
 
     db.add(db_leave_request)
-    db.commit()
+    try:
+        db.flush()
+        send_leave_application_notification(
+            admin_emails=get_admin_emails(tenant_db),
+            employee_name=employee.name,
+            leave_type=normalized_leave_type,
+            from_date=leave_request.from_date,
+            to_date=leave_request.to_date,
+            reason=leave_request.reason.strip(),
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Leave request already exists or violates constraints") from exc
+    except (SMTPConfigurationError, SMTPConnectionFailure, InvalidEmailError) as exc:
+        db.rollback()
+        status_code = 400 if isinstance(exc, InvalidEmailError) else 502
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
     db.refresh(db_leave_request)
     return db_leave_request
 

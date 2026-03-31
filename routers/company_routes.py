@@ -8,6 +8,12 @@ from models.company import Company
 from models.department import Department
 from models.tenant_database import TenantDatabase
 from models.user import User, UserRole
+from services.service_email import (
+    SMTPConnectionFailure,
+    SMTPConfigurationError,
+    InvalidEmailError,
+    send_company_registration_notification,
+)
 from tenant_context import get_request_company
 from services.tenant_provisioning import provision_tenant_database
 from schemas.company import Company as CompanySchema, CompanyRegistrationRequest, CompanyRegistrationResponse
@@ -108,6 +114,18 @@ def register_company(
             is_active=True,
         )
         db.add(admin_user)
+
+        try:
+            send_company_registration_notification(
+                company_email=company_email,
+                company_name=company.name,
+                admin_username=admin_username,
+                admin_password=payload.password,
+            )
+        except (SMTPConfigurationError, SMTPConnectionFailure, InvalidEmailError) as exc:
+            db.rollback()
+            status_code = 400 if isinstance(exc, InvalidEmailError) else 502
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
         db.commit()
     except IntegrityError:

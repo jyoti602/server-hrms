@@ -2,11 +2,18 @@ from collections.abc import Generator
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth.auth import get_current_active_user, get_password_hash, require_role
 from db.database import get_db
 from models.user import UserRole
+from services.service_email import (
+    SMTPConnectionFailure,
+    SMTPConfigurationError,
+    InvalidEmailError,
+    send_employee_account_notification,
+)
 from schemas.employee import Employee as EmployeeSchema, EmployeeCreate, EmployeeUpdate
 from tenant_context import get_tenant_db_session
 from tenant_models.department import Department
@@ -88,9 +95,10 @@ def create_employee(
     existing_user = tenant_db.query(User).filter(User.email == employee.email).first()
     if existing_user:
         account_label = "admin" if existing_user.role == UserRole.ADMIN else "employee"
+        friendly_role = "an admin" if existing_user.role == UserRole.ADMIN else "an employee"
         raise HTTPException(
             status_code=400,
-            detail=f"This email is already used by a {account_label} login in this company",
+            detail=f"This email is already used by {friendly_role} login in this company",
         )
 
     if tenant_db.query(User).filter(User.username == employee.username).first():
@@ -119,7 +127,23 @@ def create_employee(
         status=employee.status.value,
     )
     tenant_db.add(db_employee)
-    tenant_db.commit()
+
+    try:
+        tenant_db.flush()
+        send_employee_account_notification(
+            employee_email=employee.email,
+            username=employee.username,
+            password=employee.password,
+        )
+        tenant_db.commit()
+    except IntegrityError as exc:
+        tenant_db.rollback()
+        raise HTTPException(status_code=400, detail="Employee email or username already exists") from exc
+    except (SMTPConfigurationError, SMTPConnectionFailure, InvalidEmailError) as exc:
+        tenant_db.rollback()
+        status_code = 400 if isinstance(exc, InvalidEmailError) else 502
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
     tenant_db.refresh(db_employee)
     return db_employee
 
@@ -163,10 +187,10 @@ def update_my_employee_profile(
             .first()
         )
         if user_in_use:
-            account_label = "admin" if user_in_use.role == UserRole.ADMIN else "employee"
+            friendly_role = "an admin" if user_in_use.role == UserRole.ADMIN else "an employee"
             raise HTTPException(
                 status_code=400,
-                detail=f"This email is already used by a {account_label} login in this company",
+                detail=f"This email is already used by {friendly_role} login in this company",
             )
 
         if matched_user:
@@ -226,10 +250,10 @@ def update_employee(
             .first()
         )
         if user_in_use:
-            account_label = "admin" if user_in_use.role == UserRole.ADMIN else "employee"
+            friendly_role = "an admin" if user_in_use.role == UserRole.ADMIN else "an employee"
             raise HTTPException(
                 status_code=400,
-                detail=f"This email is already used by a {account_label} login in this company",
+                detail=f"This email is already used by {friendly_role} login in this company",
             )
 
     for field in (
