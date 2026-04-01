@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from auth.auth import get_current_active_user, get_password_hash, require_role
 from db.database import get_db
+from models.company import Company
 from models.user import UserRole
 from services.service_email import (
     SMTPConnectionFailure,
@@ -42,6 +43,13 @@ def validate_department_exists(db: Session, department_name: str):
     )
     if not department:
         raise HTTPException(status_code=400, detail="Please select a valid department")
+
+
+def get_company_slug(db: Session, company_id: int) -> str:
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return company.slug
 
 
 @router.get("/", response_model=List[EmployeeSchema])
@@ -84,6 +92,7 @@ def get_employee(
 @router.post("/", response_model=EmployeeSchema)
 def create_employee(
     employee: EmployeeCreate,
+    db: Session = Depends(get_db),
     tenant_db: Session = Depends(get_current_tenant_db),
     current_user=Depends(require_role(UserRole.ADMIN)),
 ):
@@ -132,6 +141,7 @@ def create_employee(
         tenant_db.flush()
         send_employee_account_notification(
             employee_email=employee.email,
+            company_slug=get_company_slug(db, current_user.company_id),
             username=employee.username,
             password=employee.password,
         )

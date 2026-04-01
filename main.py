@@ -228,8 +228,14 @@ async def resolve_company_middleware(request, call_next):
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://hrms-ui.netlify.app"],  # React dev servers
-    allow_origin_regex=r"^http://([a-zA-Z0-9-]+)\.localhost:(5173|3000)$",
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "https://hrms-ui.netlify.app",
+    ],
+    allow_origin_regex=r"^http://([a-zA-Z0-9-]+\.localhost|localhost|127\.0\.0\.1):(5173|3000)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

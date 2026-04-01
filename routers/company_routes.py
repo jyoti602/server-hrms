@@ -118,6 +118,7 @@ def register_company(
         try:
             send_company_registration_notification(
                 company_email=company_email,
+                company_slug=normalized_slug,
                 company_name=company.name,
                 admin_username=admin_username,
                 admin_password=payload.password,

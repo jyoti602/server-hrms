@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import List, Optional
 
@@ -7,12 +8,14 @@ from sqlalchemy.orm import Session
 
 from auth.auth import get_current_active_user, require_role
 from db.database import get_db
+from models.company import Company
 from models.user import User, UserRole
 from services.service_email import (
     SMTPConnectionFailure,
     SMTPConfigurationError,
     InvalidEmailError,
     send_leave_application_notification,
+    send_leave_status_notification,
 )
 from tenant_context import get_tenant_db_session
 from tenant_models.employee import Employee
@@ -26,6 +29,7 @@ from schemas.leave_request import (
 )
 
 router = APIRouter(prefix="/leave-requests", tags=["leave-requests"])
+logger = logging.getLogger(__name__)
 
 
 def get_current_tenant_db(
@@ -61,6 +65,21 @@ def get_admin_emails(db: Session) -> list[str]:
         .all()
     )
     return [email for (email,) in admins if email]
+
+
+def get_company_slug(db: Session, company_id: int) -> str:
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return company.slug
+
+
+def get_employee_email(db: Session, employee_id: str) -> Optional[str]:
+    try:
+        employee = get_employee_by_id(db, int(employee_id))
+    except (TypeError, ValueError):
+        return None
+    return employee.email if employee else None
 
 
 def validate_leave_dates(from_date, to_date):
@@ -137,6 +156,7 @@ def update_leave_status(
     status_value: LeaveStatus = Query(..., alias="status", description="New status"),
     admin_comment: Optional[str] = Query(None, max_length=1000),
     db: Session = Depends(get_current_tenant_db),
+    company_db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN)),
 ):
     leave_request = (
@@ -153,6 +173,23 @@ def update_leave_status(
 
     db.commit()
     db.refresh(leave_request)
+
+    employee_email = get_employee_email(db, leave_request.employee_id)
+    if employee_email:
+        try:
+            send_leave_status_notification(
+                employee_email=employee_email,
+                company_slug=get_company_slug(company_db, current_user.company_id),
+                employee_name=leave_request.employee_name,
+                leave_type=leave_request.leave_type,
+                from_date=leave_request.from_date,
+                to_date=leave_request.to_date,
+                status=status_value.value,
+                admin_comment=leave_request.admin_comment,
+            )
+        except Exception as exc:
+            logger.warning("Failed to send leave status notification: %s", exc)
+
     return leave_request
 
 
@@ -160,6 +197,7 @@ def update_leave_status(
 def create_leave_request(
     leave_request: LeaveRequestCreate,
     db: Session = Depends(get_current_tenant_db),
+    company_db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
@@ -208,6 +246,7 @@ def create_leave_request(
         db.flush()
         send_leave_application_notification(
             admin_emails=get_admin_emails(tenant_db),
+            company_slug=get_company_slug(company_db, current_user.company_id),
             employee_name=employee.name,
             leave_type=normalized_leave_type,
             from_date=leave_request.from_date,
@@ -305,6 +344,7 @@ def update_leave_request(
     leave_id: int,
     leave_update: LeaveRequestUpdate,
     db: Session = Depends(get_current_tenant_db),
+    company_db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     tenant_db: Session = Depends(get_current_tenant_db),
 ):
@@ -317,6 +357,7 @@ def update_leave_request(
         raise HTTPException(status_code=404, detail="Leave request not found")
 
     if current_user.role == UserRole.ADMIN:
+        previous_status = leave_request.status
         if leave_update.status is not None:
             leave_request.status = leave_update.status.value
             leave_request.reviewed_at = datetime.utcnow()
@@ -334,6 +375,24 @@ def update_leave_request(
 
     db.commit()
     db.refresh(leave_request)
+
+    if current_user.role == UserRole.ADMIN and leave_update.status is not None and leave_request.status != previous_status:
+        employee_email = get_employee_email(tenant_db, leave_request.employee_id)
+        if employee_email:
+            try:
+                send_leave_status_notification(
+                    employee_email=employee_email,
+                    company_slug=get_company_slug(company_db, current_user.company_id),
+                    employee_name=leave_request.employee_name,
+                    leave_type=leave_request.leave_type,
+                    from_date=leave_request.from_date,
+                    to_date=leave_request.to_date,
+                    status=leave_request.status,
+                    admin_comment=leave_request.admin_comment,
+                )
+            except Exception as exc:
+                logger.warning("Failed to send leave status notification: %s", exc)
+
     return leave_request
 
 

@@ -120,6 +120,7 @@ def send_email(
 
 def send_company_registration_notification(
     company_email: str,
+    company_slug: str,
     company_name: str,
     admin_username: str,
     admin_password: str,
@@ -130,6 +131,7 @@ def send_company_registration_notification(
         [
             "Company Registration Successful",
             "",
+            f"Company Slug: {company_slug}",
             f"Company Name: {company_name}",
             f"Admin Username: {admin_username}",
             f"Admin Password: {admin_password}",
@@ -141,6 +143,7 @@ def send_company_registration_notification(
 
 def send_employee_account_notification(
     employee_email: str,
+    company_slug: str,
     username: str,
     password: str,
     login_link: str | None = None,
@@ -150,6 +153,7 @@ def send_employee_account_notification(
         [
             "Your Account Has Been Created",
             "",
+            f"Company Slug: {company_slug}",
             f"Username: {username}",
             f"Password: {password}",
             f"Login Link: {login_text}",
@@ -160,6 +164,7 @@ def send_employee_account_notification(
 
 def send_leave_application_notification(
     admin_emails: Sequence[str] | Iterable[str],
+    company_slug: str,
     employee_name: str,
     leave_type: str,
     from_date,
@@ -181,14 +186,15 @@ def send_leave_application_notification(
     message["Subject"] = "New Leave Application"
     message.set_content(
         "\n".join(
-            [
-                "New Leave Application",
-                "",
-                f"Employee Name: {employee_name}",
-                f"Leave Type: {leave_type}",
-                f"Leave Dates: {from_date} to {to_date}",
-                f"Reason: {reason}",
-            ]
+        [
+            "New Leave Application",
+            "",
+            f"Company Slug: {company_slug}",
+            f"Employee Name: {employee_name}",
+            f"Leave Type: {leave_type}",
+            f"Leave Dates: {from_date} to {to_date}",
+            f"Reason: {reason}",
+        ]
         )
     )
 
@@ -213,3 +219,37 @@ def send_leave_application_notification(
             smtp.send_message(message)
     except (smtplib.SMTPException, OSError) as exc:
         raise SMTPConnectionFailure("Failed to send leave application notification") from exc
+
+
+def send_leave_status_notification(
+    employee_email: str,
+    company_slug: str,
+    employee_name: str,
+    leave_type: str,
+    from_date,
+    to_date,
+    status: str,
+    admin_comment: str | None = None,
+    login_link: str | None = None,
+) -> None:
+    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or "Login to your HRMS dashboard."
+    normalized_status = status.strip().lower()
+    subject = "Leave Request Approved" if normalized_status == "approved" else "Leave Request Rejected"
+    body_lines = [
+        f"Leave Request {status.title()}",
+        "",
+        f"Company Slug: {company_slug}",
+        f"Employee Name: {employee_name}",
+        f"Leave Type: {leave_type}",
+        f"Leave Dates: {from_date} to {to_date}",
+        f"Status: {status.title()}",
+        f"Login Link: {login_text}",
+    ]
+    if admin_comment:
+        body_lines.extend(["", f"Admin Comment: {admin_comment}"])
+
+    send_email(
+        employee_email,
+        subject,
+        "\n".join(body_lines),
+    )
