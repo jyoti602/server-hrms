@@ -1,3 +1,5 @@
+import logging
+
 from collections.abc import Generator
 from typing import List
 
@@ -9,12 +11,7 @@ from auth.auth import get_current_active_user, get_password_hash, require_role
 from db.database import get_db
 from models.company import Company
 from models.user import UserRole
-from services.service_email import (
-    SMTPConnectionFailure,
-    SMTPConfigurationError,
-    InvalidEmailError,
-    send_employee_account_notification,
-)
+from services.service_email import send_employee_account_notification
 from schemas.employee import Employee as EmployeeSchema, EmployeeCreate, EmployeeUpdate
 from tenant_context import get_tenant_db_session
 from tenant_models.department import Department
@@ -22,6 +19,7 @@ from tenant_models.employee import Employee, EmployeeStatus
 from tenant_models.user import User
 
 router = APIRouter(prefix="/employees", tags=["employees"])
+logger = logging.getLogger(__name__)
 
 
 def get_current_tenant_db(
@@ -139,22 +137,23 @@ def create_employee(
 
     try:
         tenant_db.flush()
+        tenant_db.commit()
+    except IntegrityError as exc:
+        tenant_db.rollback()
+        raise HTTPException(status_code=400, detail="Employee email or username already exists") from exc
+
+    tenant_db.refresh(db_employee)
+
+    try:
         send_employee_account_notification(
             employee_email=employee.email,
             company_slug=get_company_slug(db, current_user.company_id),
             username=employee.username,
             password=employee.password,
         )
-        tenant_db.commit()
-    except IntegrityError as exc:
-        tenant_db.rollback()
-        raise HTTPException(status_code=400, detail="Employee email or username already exists") from exc
-    except (SMTPConfigurationError, SMTPConnectionFailure, InvalidEmailError) as exc:
-        tenant_db.rollback()
-        status_code = 400 if isinstance(exc, InvalidEmailError) else 502
-        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("Employee account email could not be sent for %s", employee.email)
 
-    tenant_db.refresh(db_employee)
     return db_employee
 
 

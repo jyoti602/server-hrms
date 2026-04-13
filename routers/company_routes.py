@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -8,17 +10,13 @@ from models.company import Company
 from models.department import Department
 from models.tenant_database import TenantDatabase
 from models.user import User, UserRole
-from services.service_email import (
-    SMTPConnectionFailure,
-    SMTPConfigurationError,
-    InvalidEmailError,
-    send_company_registration_notification,
-)
+from services.service_email import send_company_registration_notification
 from tenant_context import get_request_company
 from services.tenant_provisioning import provision_tenant_database
 from schemas.company import Company as CompanySchema, CompanyRegistrationRequest, CompanyRegistrationResponse
 
 router = APIRouter(prefix="/companies", tags=["companies"])
+logger = logging.getLogger(__name__)
 
 
 def normalize_slug(value: str) -> str:
@@ -115,23 +113,21 @@ def register_company(
         )
         db.add(admin_user)
 
-        try:
-            send_company_registration_notification(
-                company_email=company_email,
-                company_slug=normalized_slug,
-                company_name=company.name,
-                admin_username=admin_username,
-                admin_password=payload.password,
-            )
-        except (SMTPConfigurationError, SMTPConnectionFailure, InvalidEmailError) as exc:
-            db.rollback()
-            status_code = 400 if isinstance(exc, InvalidEmailError) else 502
-            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
-
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Company name or slug already exists")
+
+    try:
+        send_company_registration_notification(
+            company_email=company_email,
+            company_slug=normalized_slug,
+            company_name=company.name,
+            admin_username=admin_username,
+            admin_password=payload.password,
+        )
+    except Exception:
+        logger.exception("Company registration email could not be sent for %s", company_email)
 
     return {
         "company_id": company.id,
