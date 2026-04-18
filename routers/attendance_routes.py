@@ -1,8 +1,11 @@
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
+IST = ZoneInfo("Asia/Kolkata")
 
 from db.database import get_db
 from models.user import User, UserRole
@@ -38,9 +41,9 @@ def get_employee_for_user(db: Session, current_user: User) -> Optional[Employee]
 
 
 def get_today_bounds() -> tuple[datetime, datetime]:
-    now = datetime.now()
-    start_of_day = datetime(now.year, now.month, now.day)
-    end_of_day = datetime(now.year, now.month, now.day, 23, 59, 59, 999999)
+    now = datetime.now(IST)
+    start_of_day = datetime(now.year, now.month, now.day, tzinfo=IST)
+    end_of_day = datetime(now.year, now.month, now.day, 23, 59, 59, 999999, tzinfo=IST)
     return start_of_day, end_of_day
 
 
@@ -117,7 +120,7 @@ def check_in(
     if existing_record and existing_record.check_in:
         raise HTTPException(status_code=400, detail="Check-in already recorded for today")
 
-    now = datetime.now()
+    now = datetime.now(IST)
     if existing_record:
         existing_record.date = now
         existing_record.check_in = now.time().replace(microsecond=0)
@@ -160,7 +163,7 @@ def lunch_start(
     if attendance.lunch_start and attendance.lunch_end:
         raise HTTPException(status_code=400, detail="Lunch break already completed for today")
 
-    attendance.lunch_start = datetime.now().time().replace(microsecond=0)
+    attendance.lunch_start = datetime.now(IST).time().replace(microsecond=0)
     db.commit()
     db.refresh(attendance)
     return {"message": "Lunch break started", "attendance": attendance}
@@ -188,7 +191,7 @@ def lunch_end(
     if attendance.check_out:
         raise HTTPException(status_code=400, detail="Cannot end lunch after check-out")
 
-    attendance.lunch_end = datetime.now().time().replace(microsecond=0)
+    attendance.lunch_end = datetime.now(IST).time().replace(microsecond=0)
     db.commit()
     db.refresh(attendance)
     return {"message": "Lunch break ended", "attendance": attendance}
@@ -211,14 +214,14 @@ def check_out(
     if attendance.check_out:
         raise HTTPException(status_code=400, detail="Check-out already recorded for today")
 
-    now = datetime.now()
+    now = datetime.now(IST)
     attendance.check_out = now.time().replace(microsecond=0)
 
-    check_in_datetime = datetime.combine(now.date(), attendance.check_in)
+    check_in_datetime = datetime.combine(now.date(), attendance.check_in, tzinfo=IST)
     lunch_break_hours = 0
     if attendance.lunch_start and attendance.lunch_end:
-        lunch_start_datetime = datetime.combine(now.date(), attendance.lunch_start)
-        lunch_end_datetime = datetime.combine(now.date(), attendance.lunch_end)
+        lunch_start_datetime = datetime.combine(now.date(), attendance.lunch_start, tzinfo=IST)
+        lunch_end_datetime = datetime.combine(now.date(), attendance.lunch_end, tzinfo=IST)
         lunch_break_hours = max((lunch_end_datetime - lunch_start_datetime).total_seconds() / 3600, 0)
 
     duration_hours = max((now - check_in_datetime).total_seconds() / 3600 - lunch_break_hours, 0)
