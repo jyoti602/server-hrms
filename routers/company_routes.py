@@ -126,8 +126,12 @@ def register_company(
             admin_username=admin_username,
             admin_password=payload.password,
         )
-    except Exception:
-        logger.exception("Company registration email could not be sent for %s", company_email)
+    except Exception as exc:
+        logger.warning(
+            "Company registration email could not be sent for %s: %s",
+            company_email,
+            exc,
+        )
 
     return {
         "company_id": company.id,

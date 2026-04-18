@@ -1,16 +1,18 @@
 import os
 import smtplib
 import logging
+from pathlib import Path
 from email.message import EmailMessage
 from typing import Iterable, Sequence
 
 from dotenv import load_dotenv
 from pydantic import EmailStr, TypeAdapter
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 _email_adapter = TypeAdapter(EmailStr)
 logger = logging.getLogger(__name__)
+DEFAULT_APP_LOGIN_URL = "https://hrms-ui.netlify.app"
 
 
 class EmailNotificationError(Exception):
@@ -126,7 +128,7 @@ def send_company_registration_notification(
     admin_password: str,
     login_link: str | None = None,
 ) -> None:
-    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or "Login to your HRMS dashboard."
+    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or DEFAULT_APP_LOGIN_URL
     body = "\n".join(
         [
             "Company Registration Successful",
@@ -148,7 +150,7 @@ def send_employee_account_notification(
     password: str,
     login_link: str | None = None,
 ) -> None:
-    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or "Login to your HRMS dashboard."
+    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or DEFAULT_APP_LOGIN_URL
     body = "\n".join(
         [
             "Your Account Has Been Created",
@@ -232,7 +234,7 @@ def send_leave_status_notification(
     admin_comment: str | None = None,
     login_link: str | None = None,
 ) -> None:
-    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or "Login to your HRMS dashboard."
+    login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or DEFAULT_APP_LOGIN_URL
     normalized_status = status.strip().lower()
     subject = "Leave Request Approved" if normalized_status == "approved" else "Leave Request Rejected"
     body_lines = [
