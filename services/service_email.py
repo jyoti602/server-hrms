@@ -129,15 +129,28 @@ def send_company_registration_notification(
     login_link: str | None = None,
 ) -> None:
     login_text = login_link or os.getenv("APP_LOGIN_URL", "").strip() or DEFAULT_APP_LOGIN_URL
+    login_text = login_text.rstrip("/") + "/"
     body = "\n".join(
         [
             "Company Registration Successful",
+            "",
+            "Dear User,",
+            "",
+            "Your company has been successfully registered. \U0001F389",
+            "",
+            "Company Details:",
             "",
             f"Company Slug: {company_slug}",
             f"Company Name: {company_name}",
             f"Admin Username: {admin_username}",
             f"Admin Password: {admin_password}",
-            f"Login Instructions: {login_text}",
+            "",
+            "Login Instructions:",
+            "You can now log in to your HRMS dashboard using the link below:",
+            "",
+            f"\U0001F449 {login_text}",
+            "",
+            "Please use your admin credentials to access the system.",
         ]
     )
     send_email(company_email, "Company Registration Successful", body)
