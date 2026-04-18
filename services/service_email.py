@@ -132,8 +132,6 @@ def send_company_registration_notification(
     login_text = login_text.rstrip("/") + "/"
     body = "\n".join(
         [
-            "Company Registration Successful",
-            "",
             "Dear User,",
             "",
             "Your company has been successfully registered. \U0001F389",
