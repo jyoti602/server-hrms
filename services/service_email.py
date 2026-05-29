@@ -231,6 +231,7 @@ def send_leave_application_notification(
             smtp.login(config["username"], config["password"])
             smtp.send_message(message)
     except (smtplib.SMTPException, OSError) as exc:
+        print(f"Error sending leave application notification: {exc}")
         raise SMTPConnectionFailure("Failed to send leave application notification") from exc
 
 
